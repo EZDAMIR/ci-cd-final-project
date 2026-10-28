@@ -50,7 +50,8 @@ The script uses the lab's existing `default` service account and installs
 resources in the current namespace, creates a PipelineRun,
 waits for success, exercises the service, and saves actual cluster output in
 `evidence/final-project/`. It requires namespace resource permissions, the
-Tekton API, and a default storage class. Run one pipeline at a time because the
+Tekton API, and 1Gi of storage quota on the course's `skills-network-learner`
+storage class. Run one pipeline at a time because the
 shared PVC is cleaned at the beginning.
 
 Pipeline: **cleanup → clone → lint → tests → build → deploy**.
