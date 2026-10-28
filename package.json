@@ -1,0 +1,9 @@
+{
+  "name": "ci-cd-final-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CI report utility for the Python Hit Counter final project",
+  "scripts": {
+    "ci:summary": "node bin/ci-summary.mjs"
+  }
+}

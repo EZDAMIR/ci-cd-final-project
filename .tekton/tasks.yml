@@ -1,0 +1,164 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: cleanup
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: remove
+      image: alpine:3.20
+      env:
+        - name: WORKSPACE_SOURCE_PATH
+          value: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        test -n "$WORKSPACE_SOURCE_PATH" && test "$WORKSPACE_SOURCE_PATH" != /
+        echo "Cleaning workspace: $WORKSPACE_SOURCE_PATH"
+        rm -rf "${WORKSPACE_SOURCE_PATH:?}/"*
+        rm -rf "${WORKSPACE_SOURCE_PATH}"/.[!.]*
+        rm -rf "${WORKSPACE_SOURCE_PATH}"/..?*
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: final-git-clone
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+  workspaces:
+    - name: source
+  steps:
+    - name: clone
+      image: alpine/git:2.45.2
+      workingDir: $(workspaces.source.path)
+      env:
+        - name: REPO_URL
+          value: $(params.repo-url)
+        - name: REVISION
+          value: $(params.revision)
+        - name: GIT_CONFIG_COUNT
+          value: '1'
+        - name: GIT_CONFIG_KEY_0
+          value: safe.directory
+        - name: GIT_CONFIG_VALUE_0
+          value: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        git init .
+        git remote add origin "$REPO_URL"
+        git fetch --depth=1 origin "$REVISION"
+        git checkout --detach FETCH_HEAD
+        git log -1 --oneline
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: final-flake8
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: lint
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        python -m venv /tmp/lint-venv
+        . /tmp/lint-venv/bin/activate
+        pip install --no-cache-dir -r requirements.txt
+        flake8 service tests --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 service tests --count --max-complexity=10 --max-line-length=127 --statistics
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: nose
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: run-unit-tests-with-nose
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        python -m venv /tmp/test-venv
+        . /tmp/test-venv/bin/activate
+        pip install --no-cache-dir -r requirements.txt
+        echo 'Run unit tests with nose'
+        nosetests -v --with-spec --spec-color --with-coverage --cover-package=service --cover-erase --cover-min-percentage=80
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: final-build
+spec:
+  workspaces:
+    - name: source
+  results:
+    - name: image
+      description: Immutable image reference produced by the OpenShift build
+  steps:
+    - name: build
+      image: quay.io/openshift/origin-cli:4.16
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        if ! oc get buildconfig cicd-app >/dev/null 2>&1; then
+          oc new-build --name=cicd-app --binary=true --strategy=docker
+        fi
+        oc start-build cicd-app --from-dir=. --follow --wait
+        oc get imagestreamtag cicd-app:latest -o jsonpath='{.image.dockerImageReference}' > $(results.image.path)
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: openshift-client
+spec:
+  params:
+    - name: image
+      type: string
+  steps:
+    - name: deploy
+      image: quay.io/openshift/origin-cli:4.16
+      env:
+        - name: APP_IMAGE
+          value: $(params.image)
+      script: |
+        #!/bin/sh
+        set -eu
+        oc create deployment cicd-app --image="$APP_IMAGE" --port=8000 --dry-run=client -o yaml | oc apply -f -
+        oc set image deployment/cicd-app cicd-app="$APP_IMAGE"
+        oc set probe deployment/cicd-app --readiness --get-url=http://:8000/health --initial-delay-seconds=5
+        oc set probe deployment/cicd-app --liveness --get-url=http://:8000/health --initial-delay-seconds=15
+        oc expose deployment cicd-app --port=8000 --target-port=8000 --dry-run=client -o yaml | oc apply -f -
+        oc apply -f - <<'ROUTE'
+        apiVersion: route.openshift.io/v1
+        kind: Route
+        metadata:
+          name: cicd-app
+          labels:
+            app: cicd-app
+        spec:
+          to:
+            kind: Service
+            name: cicd-app
+          port:
+            targetPort: 8000
+          tls:
+            termination: edge
+            insecureEdgeTerminationPolicy: Redirect
+        ROUTE
+        oc rollout status deployment/cicd-app --timeout=180s
+        echo 'Deployment created: cicd-app'
+        oc get deployment cicd-app -o wide
+        oc get deployment,service,route -l app=cicd-app
