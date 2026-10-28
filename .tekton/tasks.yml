@@ -1,0 +1,159 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: cleanup
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: cleanup
+      image: alpine:3.20
+      env:
+        - name: WORKSPACE
+          value: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        test -n "$WORKSPACE" && test "$WORKSPACE" != /
+        echo "Cleaning workspace: $WORKSPACE"
+        find "$WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: final-git-clone
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+  workspaces:
+    - name: source
+  steps:
+    - name: clone
+      image: alpine/git:2.45.2
+      workingDir: $(workspaces.source.path)
+      env:
+        - name: REPO_URL
+          value: $(params.repo-url)
+        - name: REVISION
+          value: $(params.revision)
+        - name: GIT_CONFIG_COUNT
+          value: '1'
+        - name: GIT_CONFIG_KEY_0
+          value: safe.directory
+        - name: GIT_CONFIG_VALUE_0
+          value: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        git init .
+        git remote add origin "$REPO_URL"
+        git fetch --depth=1 origin "$REVISION"
+        git checkout --detach FETCH_HEAD
+        git log -1 --oneline
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: final-flake8
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: lint
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        python -m venv /tmp/lint-venv
+        . /tmp/lint-venv/bin/activate
+        pip install --no-cache-dir -r requirements.txt
+        flake8 service tests --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 service tests --count --max-complexity=10 --max-line-length=127 --statistics
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: nose
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: test
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        python -m venv /tmp/test-venv
+        . /tmp/test-venv/bin/activate
+        pip install --no-cache-dir -r requirements.txt
+        nosetests -v --with-spec --spec-color --with-coverage --cover-package=service --cover-erase --cover-min-percentage=80
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: final-build
+spec:
+  workspaces:
+    - name: source
+  results:
+    - name: image
+      description: Immutable image reference produced by the OpenShift build
+  steps:
+    - name: build
+      image: quay.io/openshift/origin-cli:4.16
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        if ! oc get buildconfig hit-counter >/dev/null 2>&1; then
+          oc new-build --name=hit-counter --binary=true --strategy=docker
+        fi
+        oc start-build hit-counter --from-dir=. --follow --wait
+        oc get imagestreamtag hit-counter:latest -o jsonpath='{.image.dockerImageReference}' > $(results.image.path)
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: final-deploy
+spec:
+  params:
+    - name: image
+      type: string
+  steps:
+    - name: deploy
+      image: quay.io/openshift/origin-cli:4.16
+      env:
+        - name: APP_IMAGE
+          value: $(params.image)
+      script: |
+        #!/bin/sh
+        set -eu
+        oc create deployment hit-counter --image="$APP_IMAGE" --port=8000 --dry-run=client -o yaml | oc apply -f -
+        oc set image deployment/hit-counter hit-counter="$APP_IMAGE"
+        oc set probe deployment/hit-counter --readiness --get-url=http://:8000/health --initial-delay-seconds=5
+        oc set probe deployment/hit-counter --liveness --get-url=http://:8000/health --initial-delay-seconds=15
+        oc expose deployment hit-counter --port=8000 --target-port=8000 --dry-run=client -o yaml | oc apply -f -
+        oc apply -f - <<'ROUTE'
+        apiVersion: route.openshift.io/v1
+        kind: Route
+        metadata:
+          name: hit-counter
+          labels:
+            app: hit-counter
+        spec:
+          to:
+            kind: Service
+            name: hit-counter
+          port:
+            targetPort: 8000
+          tls:
+            termination: edge
+            insecureEdgeTerminationPolicy: Redirect
+        ROUTE
+        oc rollout status deployment/hit-counter --timeout=180s
+        oc get deployment,service,route -l app=hit-counter
