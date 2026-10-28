@@ -43,7 +43,6 @@ spec:
         #!/bin/sh
         set -eu
         git init .
-        git config --global --add safe.directory "$PWD"
         git remote add origin "$REPO_URL"
         git fetch --depth=1 origin "$REVISION"
         git checkout --detach FETCH_HEAD
@@ -60,15 +59,12 @@ spec:
     - name: lint
       image: python:3.9-slim
       workingDir: $(workspaces.source.path)
-      env:
-        - name: HOME
-          value: /tmp
       script: |
         #!/bin/sh
         set -eu
         python -m venv /tmp/lint-venv
         . /tmp/lint-venv/bin/activate
-        pip install -r requirements.txt
+        pip install --no-cache-dir -r requirements.txt
         flake8 service tests --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 service tests --count --max-complexity=10 --max-line-length=127 --statistics
 ---
@@ -83,15 +79,12 @@ spec:
     - name: test
       image: python:3.9-slim
       workingDir: $(workspaces.source.path)
-      env:
-        - name: HOME
-          value: /tmp
       script: |
         #!/bin/sh
         set -eu
         python -m venv /tmp/test-venv
         . /tmp/test-venv/bin/activate
-        pip install -r requirements.txt
+        pip install --no-cache-dir -r requirements.txt
         nosetests -v --with-spec --spec-color --with-coverage --cover-package=service --cover-erase --cover-min-percentage=80
 ---
 apiVersion: tekton.dev/v1beta1
