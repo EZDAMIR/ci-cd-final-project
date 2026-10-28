@@ -28,6 +28,16 @@ Run `bash bin/run-openshift.sh` in the authenticated lab terminal to deploy
 and collect cluster logs. Capture the three screenshots from the real console
 after success. The script saves text evidence, not screenshots.
 
+To collect evidence from an existing successful run without deploying again:
+
+```sh
+bash bin/collect-openshift-evidence.sh oc-final-run-67tg7
+```
+
+This checks the application inside its running container and saves application
+logs before checking the public Route. Public Route access from the IDE is
+tested separately with a 10-second timeout and its actual outcome is recorded.
+
 Actual workflow runs:
 https://github.com/EZDAMIR/juphc-tc_pipeline/actions
 

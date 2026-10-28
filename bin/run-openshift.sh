@@ -25,18 +25,4 @@ while true; do
   fi
   sleep 10
 done
-oc get pipelinerun "$run_name" -o yaml > evidence/final-project/openshift-pipelinerun.yml
-oc get pvc oc-final-pvc -o yaml > evidence/final-project/openshift-pvc.yml
-oc get taskruns -l "tekton.dev/pipelineRun=$run_name" -o wide > evidence/final-project/openshift-taskruns.txt
-if command -v tkn >/dev/null; then
-  tkn pipelinerun logs "$run_name" --all > evidence/final-project/openshift-pipeline-logs.txt
-fi
-oc rollout status deployment/hit-counter --timeout=180s
-route_host=$(oc get route hit-counter -o jsonpath='{.spec.host}')
-curl --fail --silent --show-error "https://$route_host/health"
-curl --fail --silent --show-error "https://$route_host/"
-curl --fail --silent --show-error "https://$route_host/counters"
-oc logs deployment/hit-counter --timestamps > evidence/final-project/openshift-application-logs.txt
-oc get deployment,service,route > evidence/final-project/openshift-resources.txt
-echo "PipelineRun $run_name succeeded. Evidence saved in evidence/final-project/."
-echo 'Capture PVC Details, Pipeline Details, and successful PipelineRun screenshots in the console.'
+bash bin/collect-openshift-evidence.sh "$run_name"
