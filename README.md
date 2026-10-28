@@ -12,7 +12,7 @@ Flask Hit Counter service using GitHub Actions, Tekton, and OpenShift.
 - `.tekton/tasks.yml`: cleanup, clone, lint, nose, build, and deploy tasks.
 - `.tekton/pipeline.yml`: `oc-final` pipeline and shared workspace.
 - `.tekton/pvc.yml`: 1 GiB `oc-final-pvc` persistent workspace.
-- `.tekton/rbac.yml`: pipeline service account and namespace role binding.
+- `.tekton/rbac.yml`: optional account and role binding for other environments.
 - `.tekton/run.yml`: repeatable PipelineRun.
 - `bin/run-openshift.sh`: deployment and real log collection.
 - `SUBMISSION.md`: submission URLs and evidence checklist.
@@ -46,7 +46,8 @@ cd ci-cd-final-project
 bash bin/run-openshift.sh
 ```
 
-The script installs resources in the current namespace, creates a PipelineRun,
+The script uses the lab's existing `default` service account and installs
+resources in the current namespace, creates a PipelineRun,
 waits for success, exercises the service, and saves actual cluster output in
 `evidence/final-project/`. It requires namespace resource permissions, the
 Tekton API, and a default storage class. Run one pipeline at a time because the

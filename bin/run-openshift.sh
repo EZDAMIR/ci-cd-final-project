@@ -4,10 +4,10 @@ cd "$(dirname "$0")/.."
 command -v oc >/dev/null || { echo 'Run this in the authenticated OpenShift lab terminal.' >&2; exit 1; }
 oc whoami
 oc project
-oc get crd pipelines.tekton.dev >/dev/null
+# Check Tekton through a namespaced resource; lab users cannot read CRDs.
+oc get pipelines.tekton.dev >/dev/null
 mkdir -p evidence/final-project
 oc apply -f .tekton/pvc.yml
-oc apply -f .tekton/rbac.yml
 oc apply -f .tekton/tasks.yml
 oc apply -f .tekton/pipeline.yml
 oc get pipeline oc-final -o yaml > evidence/final-project/openshift-pipeline.yml

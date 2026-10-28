@@ -3,7 +3,7 @@ kind: PipelineRun
 metadata:
   generateName: oc-final-run-
 spec:
-  serviceAccountName: final-project-pipeline
+  serviceAccountName: default
   pipelineRef:
     name: oc-final
   workspaces:
