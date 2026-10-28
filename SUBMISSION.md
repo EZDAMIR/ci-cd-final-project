@@ -9,7 +9,12 @@ Submit these links for questions 1–3:
 3. Tekton cleanup and nose tasks:
    https://github.com/EZDAMIR/juphc-tc_pipeline/blob/ci-cd-final-project/.tekton/tasks.yml
 
-Questions 4–8 require actual execution evidence:
+Question 5 is ready: [successful run](https://github.com/EZDAMIR/juphc-tc_pipeline/actions/runs/40639645031),
+[all step results and test output](evidence/final-project/github-actions-steps.txt),
+and [full runner output](evidence/final-project/github-actions-output.txt).
+All steps succeeded; nine nose tests passed with 99% coverage.
+
+Questions 4, 6, 7, and 8 still require real OpenShift execution evidence:
 
 | Question | Required artifact | Source |
 | --- | --- | --- |
