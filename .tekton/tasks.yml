@@ -138,6 +138,22 @@ spec:
         oc set probe deployment/hit-counter --readiness --get-url=http://:8000/health --initial-delay-seconds=5
         oc set probe deployment/hit-counter --liveness --get-url=http://:8000/health --initial-delay-seconds=15
         oc expose deployment hit-counter --port=8000 --target-port=8000 --dry-run=client -o yaml | oc apply -f -
-        oc create route edge hit-counter --service=hit-counter --port=8000 --insecure-policy=Redirect --dry-run=client -o yaml | oc apply -f -
+        oc apply -f - <<'ROUTE'
+        apiVersion: route.openshift.io/v1
+        kind: Route
+        metadata:
+          name: hit-counter
+          labels:
+            app: hit-counter
+        spec:
+          to:
+            kind: Service
+            name: hit-counter
+          port:
+            targetPort: 8000
+          tls:
+            termination: edge
+            insecureEdgeTerminationPolicy: Redirect
+        ROUTE
         oc rollout status deployment/hit-counter --timeout=180s
         oc get deployment,service,route -l app=hit-counter
