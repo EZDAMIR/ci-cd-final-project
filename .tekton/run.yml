@@ -1,0 +1,13 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: oc-final-run-
+spec:
+  serviceAccountName: final-project-pipeline
+  pipelineRef:
+    name: oc-final
+  workspaces:
+    - name: shared-workspace
+      persistentVolumeClaim:
+        claimName: oc-final-pvc
+  timeout: 30m
