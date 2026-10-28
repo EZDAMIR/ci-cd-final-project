@@ -17,11 +17,26 @@ if command -v tkn >/dev/null; then
     echo 'Could not collect pipeline logs with tkn; other evidence will still be collected.' >&2
   fi
 fi
-oc logs deployment/cicd-app --timestamps > evidence/final-project/openshift-application-logs.txt
 oc get deployment,service,route > evidence/final-project/openshift-resources.txt
 oc rollout status deployment/cicd-app --timeout=180s
+app_pod=''
+for attempt in 1 2 3 4 5 6; do
+  oc get deployment cicd-app -o json > evidence/final-project/openshift-deployment.json
+  oc get replicasets -l app=cicd-app -o json > evidence/final-project/openshift-replicasets.json
+  oc get pods -l app=cicd-app -o json > evidence/final-project/openshift-pods.json
+  if app_pod=$(python3 bin/select-ready-pod.py evidence/final-project/openshift-deployment.json evidence/final-project/openshift-replicasets.json evidence/final-project/openshift-pods.json); then
+    break
+  fi
+  if [[ "$attempt" == 6 ]]; then
+    echo 'No current Ready application pod found; deployment and pod details were saved.' >&2
+    exit 1
+  fi
+  sleep 5
+done
+echo "Collecting application evidence from Ready pod: $app_pod"
+oc logs "$app_pod" -c cicd-app --timestamps > evidence/final-project/openshift-application-logs.txt
 # Check the running application without relying on the public ingress network.
-if ! oc exec -i deployment/cicd-app -- python - <<'PY' | tee evidence/final-project/openshift-application-check.txt
+if ! oc exec -i "$app_pod" -c cicd-app -- python - <<'PY' | tee evidence/final-project/openshift-application-check.txt
 import urllib.request
 
 for path in ("/health", "/", "/counters"):
@@ -29,11 +44,11 @@ for path in ("/health", "/", "/counters"):
         print(path, response.status, response.read().decode().strip())
 PY
 then
-  oc logs deployment/cicd-app --timestamps > evidence/final-project/openshift-application-logs.txt
+  oc logs "$app_pod" -c cicd-app --timestamps > evidence/final-project/openshift-application-logs.txt
   echo 'Internal application check failed; application logs have been saved.' >&2
   exit 1
 fi
-oc logs deployment/cicd-app --timestamps > evidence/final-project/openshift-application-logs.txt
+oc logs "$app_pod" -c cicd-app --timestamps > evidence/final-project/openshift-application-logs.txt
 cp evidence/final-project/openshift-application-logs.txt evidence/final-project/oc-pipeline-application-logs.txt
 if ! grep -q 'SERVICERUNNING' evidence/final-project/oc-pipeline-application-logs.txt || ! grep -q ':8000' evidence/final-project/oc-pipeline-application-logs.txt; then
   echo 'Application logs must include SERVICERUNNING and the listener on port 8000. Saved logs are available for inspection.' >&2
