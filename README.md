@@ -54,7 +54,7 @@ Tekton API, and 1Gi of storage quota on the course's `skills-network-learner`
 storage class. Run one pipeline at a time because the
 shared PVC is cleaned at the beginning.
 
-Pipeline: **cleanup → clone → lint → tests → build → deploy**.
+Pipeline: **cleanup → git-clone → flake8 → nose → buildah → deploy**.
 OpenShift binary Docker builds push to the internal registry. Deployment uses
 the built image digest, readiness/liveness probes, and an HTTPS Route on port 8000.
 

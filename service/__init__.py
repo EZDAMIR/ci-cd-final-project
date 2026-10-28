@@ -12,5 +12,6 @@ from service.common import log_handlers  # pylint: disable=wrong-import-position
 log_handlers.init_logging(app, "gunicorn.error")
 
 app.logger.info(70 * "*")
-app.logger.info("  S E R V I C E   R U N N I N G  ".center(70, "*"))
+# Final project requires this exact startup message in application logs.
+app.logger.info(" SERVICERUNNING ".center(70, "*"))
 app.logger.info(70 * "*")

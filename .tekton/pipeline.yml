@@ -19,7 +19,7 @@ spec:
       workspaces:
         - name: source
           workspace: shared-workspace
-    - name: clone
+    - name: git-clone
       runAfter: [cleanup]
       taskRef:
         name: final-git-clone
@@ -31,31 +31,31 @@ spec:
       workspaces:
         - name: source
           workspace: shared-workspace
-    - name: lint
-      runAfter: [clone]
+    - name: flake8
+      runAfter: [git-clone]
       taskRef:
         name: final-flake8
       workspaces:
         - name: source
           workspace: shared-workspace
-    - name: tests
-      runAfter: [lint]
+    - name: nose
+      runAfter: [flake8]
       taskRef:
         name: nose
       workspaces:
         - name: source
           workspace: shared-workspace
-    - name: build
-      runAfter: [tests]
+    - name: buildah
+      runAfter: [nose]
       taskRef:
         name: final-build
       workspaces:
         - name: source
           workspace: shared-workspace
     - name: deploy
-      runAfter: [build]
+      runAfter: [buildah]
       taskRef:
         name: final-deploy
       params:
         - name: image
-          value: $(tasks.build.results.image)
+          value: $(tasks.buildah.results.image)

@@ -34,6 +34,7 @@ then
   exit 1
 fi
 oc logs deployment/hit-counter --timestamps > evidence/final-project/openshift-application-logs.txt
+cp evidence/final-project/openshift-application-logs.txt evidence/final-project/oc-pipeline-application-logs.txt
 route_host=$(oc get route hit-counter -o jsonpath='{.spec.host}')
 if curl --connect-timeout 5 --max-time 10 --fail --silent --show-error "https://$route_host/health" > evidence/final-project/openshift-public-health.txt 2> evidence/final-project/openshift-public-health-error.txt; then
   echo 'Public Route health check passed.'
