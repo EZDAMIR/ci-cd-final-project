@@ -1,5 +1,7 @@
 # ci-cd-final-project
 
+**Public GitHub README URL:** https://github.com/EZDAMIR/ci-cd-final-project/blob/main/README.md
+
 **Project:** Hit Counter Service CI/CD Pipeline  
 **Author:** Damir (EZDAMIR)  
 **Course:** IBM / Coursera Continuous Integration and Delivery (CI/CD)  
